@@ -18,6 +18,21 @@ enum State { New, Working, Moving, Gone };
 
 const int ITERATIONS = 10;
 
+// return a value between min and max, but not the number exclude (min <= r < max && r != exclude)
+int rand_range_exclude(int exclude, int min, int max)
+{
+    int random = rand_range(min, max-1) + min;
+    if (random >= exclude) {
+        random++;
+    }
+    return random;
+}
+
+double rand_range(double min_n, double max_n)
+{
+    return (double)rand()/RAND_MAX * (max_n - min_n) + min_n;
+}
+
 class Person {
 public:
     Person(int new_id)
@@ -49,21 +64,6 @@ public:
 private:
     double t;
 };
-
-// return a value between min and max, but not the number exclude (min <= r < max && r != exclude)
-int rand_range_exclude(int exclude, int min, int max)
-{
-    int random = rand_range(min, max-1) + min;
-    if (random >= exclude) {
-        random++;
-    }
-    return random;
-}
-
-double rand_range(double min_n, double max_n)
-{
-    return (double)rand()/RAND_MAX * (max_n - min_n) + min_n;
-}
 
 
 int get_next_floor(int current_floor)
@@ -147,7 +147,7 @@ void simulateFloor(int rank) {
             if (p.state == Moving)
             {
                 cout << "Person " << p.id << " done working, waiting for elevator on floor " << rank << endl;
-                // send person to elevator
+                // send person to elevator, this blocks so if any other persons wants an elevator, they will wait
                 int elevator = rand_range(0, 2);
                 ::MPI_Send(&p.id, 1, MPI_INT, elevator, 0, MPI_COMM_WORLD);
                 p.state = Gone;
