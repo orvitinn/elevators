@@ -14,7 +14,7 @@ using std::endl;
 using std::time;
 using std::vector;
 
-enum State { Working, Moving, Gone };
+enum State { New, Working, Moving, Gone };
 
 const int ITERATIONS = 10;
 
@@ -23,10 +23,12 @@ public:
     Person(int new_id)
     {
         id = new_id;
+        state = New;
     }
     void start_work()
     {
-        t = MPI_Wtime( ) + (rand() % 3 )+1;
+        t = MPI_Wtime() + rand_range_exclude(1, 4);
+        state = Working;
     }
     
     void simulate()
@@ -48,14 +50,21 @@ private:
     double t;
 };
 
-int get_random_value(int exclude, int min, int max)
+// return a value between min and max, but not the number exclude (min <= r < max && r != exclude)
+int rand_range_exclude(int exclude, int min, int max)
 {
-    int random = rand() % (max+1 - min -1);
-    if (random == exclude) {
+    int random = rand_range(min, max-1) + min;
+    if (random >= exclude) {
         random++;
     }
-    return random+min;
+    return random;
 }
+
+double rand_range(double min_n, double max_n)
+{
+    return (double)rand()/RAND_MAX * (max_n - min_n) + min_n;
+}
+
 
 int get_next_floor(int current_floor)
 {
@@ -66,7 +75,6 @@ int get_next_floor(int current_floor)
         return random_value ? 2: 4;
     if (current_floor == 4)
         return random_value ? 2: 3;
-    
 }
 
 void simulateElevator(int rank) {
@@ -84,8 +92,15 @@ void simulateElevator(int rank) {
         if (person == -1)
             break;
         
+        // choose new floor for person
         int destination = get_next_floor(source);
-        cout << "Elevator " << rank << " sending person " << person << " from floor " << source << " to floor " << destination<< "." << endl;
+        int movingtime = abs(source - destination);
+        
+        cout << "Elevator " << rank << " sending person " << person << " from floor " << source << " to floor " << destination<< ", taking " << movingtime << " seconds." << endl;
+        
+        // elevator is now moving
+        sleep(movingtime);
+        
         ::MPI_Send(&person, 1, MPI_INT, destination, 0, MPI_COMM_WORLD);
         if (count++ > ITERATIONS)
             run_simulation = false;
@@ -133,7 +148,7 @@ void simulateFloor(int rank) {
             {
                 cout << "Person " << p.id << " done working, waiting for elevator on floor " << rank << endl;
                 // send person to elevator
-                int elevator = rand() % 2;
+                int elevator = rand_range(0, 2);
                 ::MPI_Send(&p.id, 1, MPI_INT, elevator, 0, MPI_COMM_WORLD);
                 p.state = Gone;
             }
@@ -187,7 +202,7 @@ int main(int argc, char* argv[]) {
     MPI_Comm_rank( MPI_COMM_WORLD, &rank );
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     
-    srand((unsigned)time(NULL));
+    srand((unsigned)time(NULL) + rank*100);
     
     if (rank < 2)
     {
