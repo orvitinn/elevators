@@ -18,6 +18,12 @@ enum State { New, Working, Moving, Gone };
 
 const int ITERATIONS = 10;
 
+double rand_range(double min_n, double max_n)
+{
+    return (double)rand()/RAND_MAX * (max_n - min_n) + min_n;
+}
+
+
 // return a value between min and max, but not the number exclude (min <= r < max && r != exclude)
 int rand_range_exclude(int exclude, int min, int max)
 {
@@ -28,10 +34,6 @@ int rand_range_exclude(int exclude, int min, int max)
     return random;
 }
 
-double rand_range(double min_n, double max_n)
-{
-    return (double)rand()/RAND_MAX * (max_n - min_n) + min_n;
-}
 
 class Person {
 public:
@@ -42,7 +44,7 @@ public:
     }
     void start_work()
     {
-        t = MPI_Wtime() + rand_range_exclude(1, 4);
+        t = MPI_Wtime() + rand_range(1, 4);
         state = Working;
     }
     
