@@ -11,3 +11,6 @@ Annað fall til að geta sofið í millisekúndur (microsekúndur reyndar)
 Vantar:
 MPI_IO
 sleep í lyftur
+
+
+Um leið og ég reyni að opna skrá með MPI_IO klikkar forritið, jafnvel þó ég skrifi ekkert í skrá. Þarf að skoða betur.
