@@ -16,7 +16,7 @@ using std::vector;
 
 enum State { New, Working, Moving, Gone };
 
-const int ITERATIONS = 20;
+const int RUNTIME_SECONDS = 10.0;
 
 double rand_range(double min_n, double max_n)
 {
@@ -83,6 +83,7 @@ int get_next_floor(int current_floor)
 
 
 void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
+    double start = MPI_Wtime();
     cout << "Elevator " << rank << " running." << endl;
     // elevator simulation
     int person;
@@ -100,19 +101,19 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
     MPI_Info_create(&info);
     char buffer[4];
     
-    int rc = MPI_File_open(lyftuhopur, file_name, MPI_MODE_CREATE | MPI_MODE_RDWR | MPI_MODE_SEQUENTIAL, MPI_INFO_NULL, &fh);
+    int rc = MPI_File_open(lyftuhopur, file_name, MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh);
     // int rc = MPI_File_open( MPI_COMM_WORLD, file_name, MPI_MODE_CREATE | MPI_MODE_RDWR | MPI_MODE_SEQUENTIAL, MPI_INFO_NULL, &out_file);
 
     cout << "MPI_File_open returned " << rc << " on " << rank << endl;
     
-    while(run_simulation) {
-        cout << ". " << endl;
+    while((MPI_Wtime() - start) < RUNTIME_SECONDS) {
+        cout << rank << ".." << endl;
         ::MPI_Recv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-        cout << "-" << endl;
+        cout << rank << "-" << endl;
         
         if (person == -1)
         {
-            cout << "Elevator " << rank << "got a quit message. " << endl;
+            cout << "Elevator " << rank << " got a quit message. " << endl;
             break;
         }
         // send the person to either of the other floors
@@ -128,11 +129,14 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
         // action
         // 1: entered elevator
         // 2: left elevator
+        
+        cout << "Elevator " << rank << " writing to file." << endl;
+        
         buffer[0] = static_cast<char>(person);
         buffer[1] = 1;
         buffer[2] = static_cast<char>(rank);
         buffer[3] = static_cast<char>(source);
-        MPI_File_write(fh, buffer, 4, MPI_CHAR, &status);
+        MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
         
         cout << "Elevator " << rank << " sending person " << person << " from floor " << source << " to floor " << destination<< ", taking " << movingtime << " seconds." << endl;
         
@@ -147,39 +151,62 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
         buffer[1] = 2;
         buffer[3] = static_cast<char>(destination);
         MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
-        
-        if (count++ > ITERATIONS)
-            run_simulation = false;
     }
+    
+    
+    
+    ::MPI_Recv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+    cout << "Elevator " << rank << " got another quit message" << endl;
+    ::MPI_Recv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+    cout << "Elevator " << rank << " got the last quit message" << endl;
+    
+    // send quit message to all floors
+    int quit_message = -1;
+    ::MPI_Send(&quit_message, 1, MPI_INT, 2, 0, MPI_COMM_WORLD);
+    ::MPI_Send(&quit_message, 1, MPI_INT, 3, 0, MPI_COMM_WORLD);
+    ::MPI_Send(&quit_message, 1, MPI_INT, 4, 0, MPI_COMM_WORLD);
+    
+    cout << "Elevator " << rank << " sent quit messages to all floors." << endl;
     
     rc = MPI_File_close(&fh);
 }
 
-void simulateFloor(int rank) {
+void simulateFloor(int rank, MPI_Comm& haedahopur) {
+    MPI_Comm_rank(haedahopur, &rank);
+    double start = MPI_Wtime();
+
     // floor simulation
     vector<Person> persons;
     vector<int> elevators = {0,1};
 
+    char buf[14];
     
     MPI_File fh;
     MPI_Info info;
-    // char filename[] = "/home/maa33/code/elevators/elevator_dump.bin";
-    char file_name[] = "/home/maa33/code/elevators/data.out";
-    MPI_Info_create(&info);
-    char buffer[4];
+    MPI_Status status;
     
+#if 0
+    char file_name[] = "/home/maa33/code/elevators/names.txt";
+    char native[] = "native";
+    int rc = MPI_File_open( haedahopur, file_name, MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+    MPI_File_set_view(fh, rank*sizeof(char)*15, MPI_CHAR, MPI_CHAR, native, MPI_INFO_NULL);
+    MPI_File_read(fh, buf, 14, MPI_CHAR, &status);
+
+    cout << rank << " read name from file: " << buf << endl;
     
+    rc = MPI_File_close(&fh);
+#endif
     // lesa nöfn úr skrá með mpi_io - en fyrst - setja inn einhver gildi
-    if (rank == 2) {
+    if (rank == 0) {
         persons.push_back(Person(1));
         persons.push_back(Person(2));
     }
-    else if (rank == 3)
+    else if (rank == 1)
     {
         persons.push_back(Person(3));
         persons.push_back(Person(4));
     }
-    else if (rank == 4)
+    else if (rank == 2)
     {
         persons.push_back(Person(5));
         persons.push_back(Person(6));
@@ -189,7 +216,8 @@ void simulateFloor(int rank) {
     
     int incoming_person_id;
     MPI_Request request;
-    MPI_Status status;
+    int cnt = 0;
+
     
     bool run_simulation = true;
     
@@ -198,7 +226,7 @@ void simulateFloor(int rank) {
     int count = 0;
     
 
-    while (run_simulation)
+    while((MPI_Wtime() - start) < RUNTIME_SECONDS)
     {
         for (auto it = persons.begin(); it != persons.end();)
         {
@@ -222,6 +250,10 @@ void simulateFloor(int rank) {
         MPI_Test(&request, &something_read, &status);
         if (something_read)
         {
+            if (incoming_person_id == -1) {
+                cnt++;
+                break;
+            }
             cout << "Person " << incoming_person_id << " entered floor " << rank << endl;
             Person p(incoming_person_id);
             p.start_work();
@@ -229,25 +261,29 @@ void simulateFloor(int rank) {
             ::MPI_Irecv(&incoming_person_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request);
         }
         
-        if (count++ > ITERATIONS)
-            run_simulation = false;
-        
-        usleep(500000);
+        usleep(100000);
         // optional: sleep until next person is done working
     }
     
     // sendum á báðar lyftur að við séum að fara að hætta... lesum líka ef lyftur eru að reyna að senda okkur
     // allt async þar sem okkur er sama um gildið - við erum hætt!
+    cout << "Simulation on floor " << rank << " quitting. Sending quit messages" << endl;
     int quit_message = -1;
-    int answer;
-    MPI_Request request2,request3;
+    int answer, answer2;
+    MPI_Request request2,request3, request4;
     ::MPI_Isend(&quit_message, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
     ::MPI_Isend(&quit_message, 1, MPI_INT, 1, 0, MPI_COMM_WORLD, &request2);
-    ::MPI_Irecv(&answer, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request3);
-    
-    // quit all processes
-    sleep(2);
-    // MPI_Abort(MPI_COMM_WORLD, 0);
+    // wait for the quit message from the elevators
+    int incoming_message;
+    while (cnt < 2)
+    {
+        ::MPI_Recv(&incoming_message, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+
+        cout << "Floor " << rank << " in quit mode, got message " << incoming_message << ", cnt=" << cnt << endl;
+        if (incoming_message == -1)
+            cnt++;
+    }
+    cout << "Simulation on floor " << rank << " now finally finished quitting." << endl;
 }
 
 
@@ -265,13 +301,18 @@ int main(int argc, char* argv[]) {
     
     
     // búum til com fyrir lyfturnar.
-    MPI_Group lyftuhopur, allir;
-    MPI_Comm lyftucomm;
+    MPI_Group lyftuhopur, haedahopur, allir;
+    MPI_Comm lyftucomm, haedacomm;
     vector<int> lyftur = {0, 1};
+    vector<int> haedir = {2, 3, 4};
 
     MPI_Comm_group(MPI_COMM_WORLD, &allir);
+    
     MPI_Group_incl(allir, 2, &lyftur[0], &lyftuhopur);
     MPI_Comm_create(MPI_COMM_WORLD, lyftuhopur, &lyftucomm);
+
+    MPI_Group_incl(allir, 3, &haedir[0], &haedahopur);
+    MPI_Comm_create(MPI_COMM_WORLD, haedahopur, &haedacomm);
     
     if (rank < 2)
     {
@@ -279,7 +320,7 @@ int main(int argc, char* argv[]) {
     }
     else
     {
-        simulateFloor(rank);
+        simulateFloor(rank, haedacomm);
     }
     
     cout << "Node " << rank << " stopping." << endl;
