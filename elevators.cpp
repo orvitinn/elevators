@@ -16,7 +16,7 @@ using std::vector;
 
 enum State { New, Working, Moving, Gone };
 
-const int ITERATIONS = 10;
+const int ITERATIONS = 20;
 
 double rand_range(double min_n, double max_n)
 {
@@ -82,7 +82,8 @@ int get_next_floor(int current_floor)
 }
 
 
-void simulateElevator(int rank) {
+void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
+    cout << "Elevator " << rank << " running." << endl;
     // elevator simulation
     int person;
     // rank 2,3,4 are floors 1,2,3
@@ -90,20 +91,30 @@ void simulateElevator(int rank) {
     MPI_Status status;
     bool run_simulation = true;
     int count = 0;
-
     
     // File io
     MPI_File fh;
     MPI_Info info;
-    char filename[] = "/home/maa33/code/elevators/elevator_dump.bin";
+    // char filename[] = "/home/maa33/code/elevators/elevator_dump.bin";
+    char file_name[] = "/home/maa33/code/elevators/data.out";
     MPI_Info_create(&info);
     char buffer[4];
-    // int rc = MPI_File_open( MPI_COMM_WORLD, filename, MPI_MODE_CREATE | MPI_MODE_WRONLY | MPI_MODE_SEQUENTIAL, info, &fh);
-    // MPI_File_set_view ( fh, MPI_DISPLACEMENT_CURRENT, MPI_INT, MPI_INT, "native", MPI_INFO_NULL );
-    // cout << "MPI_File_open returned " << rc << endl;
+    
+    int rc = MPI_File_open(lyftuhopur, file_name, MPI_MODE_CREATE | MPI_MODE_RDWR | MPI_MODE_SEQUENTIAL, MPI_INFO_NULL, &fh);
+    // int rc = MPI_File_open( MPI_COMM_WORLD, file_name, MPI_MODE_CREATE | MPI_MODE_RDWR | MPI_MODE_SEQUENTIAL, MPI_INFO_NULL, &out_file);
+
+    cout << "MPI_File_open returned " << rc << " on " << rank << endl;
     
     while(run_simulation) {
+        cout << ". " << endl;
         ::MPI_Recv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+        cout << "-" << endl;
+        
+        if (person == -1)
+        {
+            cout << "Elevator " << rank << "got a quit message. " << endl;
+            break;
+        }
         // send the person to either of the other floors
         int source = status.MPI_SOURCE;
         // choose new floor for person
@@ -121,31 +132,42 @@ void simulateElevator(int rank) {
         buffer[1] = 1;
         buffer[2] = static_cast<char>(rank);
         buffer[3] = static_cast<char>(source);
-        // MPI_File_write(fh, buffer, 4, MPI_CHAR, &status);
+        MPI_File_write(fh, buffer, 4, MPI_CHAR, &status);
         
         cout << "Elevator " << rank << " sending person " << person << " from floor " << source << " to floor " << destination<< ", taking " << movingtime << " seconds." << endl;
         
         // elevator is now moving
-        sleep(movingtime);
+        // usleep(movingtime*10000);
         
         ::MPI_Send(&person, 1, MPI_INT, destination, 0, MPI_COMM_WORLD);
         
-        // write again when person has left the elevvator (and entered a floor)
+        cout << "Elevator " << rank << " empty." << endl;
+        
+        // write again when person has left the elevator (and entered a floor)
         buffer[1] = 2;
-        buffer[2] = static_cast<char>(rank);
         buffer[3] = static_cast<char>(destination);
-        // MPI_File_write(fh, buffer, 4, MPI_CHAR, &status);
+        MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
         
         if (count++ > ITERATIONS)
             run_simulation = false;
     }
-    // rc = MPI_File_close(&fh);
+    
+    rc = MPI_File_close(&fh);
 }
 
 void simulateFloor(int rank) {
     // floor simulation
     vector<Person> persons;
     vector<int> elevators = {0,1};
+
+    
+    MPI_File fh;
+    MPI_Info info;
+    // char filename[] = "/home/maa33/code/elevators/elevator_dump.bin";
+    char file_name[] = "/home/maa33/code/elevators/data.out";
+    MPI_Info_create(&info);
+    char buffer[4];
+    
     
     // lesa nöfn úr skrá með mpi_io - en fyrst - setja inn einhver gildi
     if (rank == 2) {
@@ -171,8 +193,6 @@ void simulateFloor(int rank) {
     
     bool run_simulation = true;
     
-    sleep(1);
-    
     // check for new persons on floor
     ::MPI_Irecv(&incoming_person_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request);
     int count = 0;
@@ -180,22 +200,6 @@ void simulateFloor(int rank) {
 
     while (run_simulation)
     {
-        /*
-        for (Person& p: persons)
-        {
-            p.simulate();
-            if (p.state == Moving)
-            {
-                cout << "Person " << p.id << " done working, waiting for elevator on floor " << rank << endl;
-                // send person to elevator, this blocks so if any other persons wants an elevator, they will wait
-                int elevator = rand_range(0, 2);
-                ::MPI_Send(&p.id, 1, MPI_INT, elevator, 0, MPI_COMM_WORLD);
-                p.state = Gone;
-            }
-        }
-         */
-        
-        // remove all persons with state == Moving from the vector
         for (auto it = persons.begin(); it != persons.end();)
         {
             it->simulate();
@@ -232,16 +236,24 @@ void simulateFloor(int rank) {
         // optional: sleep until next person is done working
     }
     
-    // quit all processes
-    MPI_Abort(MPI_COMM_WORLD, 0);
+    // sendum á báðar lyftur að við séum að fara að hætta... lesum líka ef lyftur eru að reyna að senda okkur
+    // allt async þar sem okkur er sama um gildið - við erum hætt!
+    int quit_message = -1;
+    int answer;
+    MPI_Request request2,request3;
+    ::MPI_Isend(&quit_message, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
+    ::MPI_Isend(&quit_message, 1, MPI_INT, 1, 0, MPI_COMM_WORLD, &request2);
+    ::MPI_Irecv(&answer, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request3);
     
-    // implement a very basic elevator and a very basic person - basic notion is try out MPI-IO.
+    // quit all processes
+    sleep(2);
+    // MPI_Abort(MPI_COMM_WORLD, 0);
 }
 
 
 int main(int argc, char* argv[]) {
     MPI_Status status;
-    MPI_Comm comm,scomm;
+    // MPI_Comm comm,scomm;
     int rank, size, color, errs=0;
    
     
@@ -251,9 +263,19 @@ int main(int argc, char* argv[]) {
     
     srand((unsigned)time(NULL) + rank*100);
     
+    
+    // búum til com fyrir lyfturnar.
+    MPI_Group lyftuhopur, allir;
+    MPI_Comm lyftucomm;
+    vector<int> lyftur = {0, 1};
+
+    MPI_Comm_group(MPI_COMM_WORLD, &allir);
+    MPI_Group_incl(allir, 2, &lyftur[0], &lyftuhopur);
+    MPI_Comm_create(MPI_COMM_WORLD, lyftuhopur, &lyftucomm);
+    
     if (rank < 2)
     {
-        simulateElevator(rank);
+        simulateElevator(rank, lyftucomm);
     }
     else
     {
