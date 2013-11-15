@@ -24,6 +24,8 @@ double rand_range(double min_n, double max_n)
 }
 
 
+
+
 // return a value between min and max, but not the number exclude (min <= r < max && r != exclude)
 int rand_range_exclude(int exclude, int min, int max)
 {
@@ -79,6 +81,7 @@ int get_next_floor(int current_floor)
         return random_value ? 2: 3;
 }
 
+
 void simulateElevator(int rank) {
     // elevator simulation
     int person;
@@ -87,16 +90,38 @@ void simulateElevator(int rank) {
     MPI_Status status;
     bool run_simulation = true;
     int count = 0;
+
+    
+    // File io
+    MPI_File fh;
+    MPI_Info info;
+    char filename[] = "/home/maa33/code/elevators/elevator_dump.bin";
+    MPI_Info_create(&info);
+    char buffer[4];
+    // int rc = MPI_File_open( MPI_COMM_WORLD, filename, MPI_MODE_CREATE | MPI_MODE_WRONLY | MPI_MODE_SEQUENTIAL, info, &fh);
+    // MPI_File_set_view ( fh, MPI_DISPLACEMENT_CURRENT, MPI_INT, MPI_INT, "native", MPI_INFO_NULL );
+    // cout << "MPI_File_open returned " << rc << endl;
+    
     while(run_simulation) {
         ::MPI_Recv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
         // send the person to either of the other floors
         int source = status.MPI_SOURCE;
-        if (person == -1)
-            break;
-        
         // choose new floor for person
         int destination = get_next_floor(source);
         int movingtime = abs(source - destination);
+        
+        // write to the binary file when a person enters the elevator
+        // IO layout. Each record 32 bits
+        // person id, action, elevator, floor
+        //    8 bit   8 bit    8 bit    8 bit
+        // action
+        // 1: entered elevator
+        // 2: left elevator
+        buffer[0] = static_cast<char>(person);
+        buffer[1] = 1;
+        buffer[2] = static_cast<char>(rank);
+        buffer[3] = static_cast<char>(source);
+        // MPI_File_write(fh, buffer, 4, MPI_CHAR, &status);
         
         cout << "Elevator " << rank << " sending person " << person << " from floor " << source << " to floor " << destination<< ", taking " << movingtime << " seconds." << endl;
         
@@ -104,9 +129,17 @@ void simulateElevator(int rank) {
         sleep(movingtime);
         
         ::MPI_Send(&person, 1, MPI_INT, destination, 0, MPI_COMM_WORLD);
+        
+        // write again when person has left the elevvator (and entered a floor)
+        buffer[1] = 2;
+        buffer[2] = static_cast<char>(rank);
+        buffer[3] = static_cast<char>(destination);
+        // MPI_File_write(fh, buffer, 4, MPI_CHAR, &status);
+        
         if (count++ > ITERATIONS)
             run_simulation = false;
     }
+    // rc = MPI_File_close(&fh);
 }
 
 void simulateFloor(int rank) {
@@ -137,12 +170,17 @@ void simulateFloor(int rank) {
     MPI_Status status;
     
     bool run_simulation = true;
+    
+    sleep(1);
+    
     // check for new persons on floor
     ::MPI_Irecv(&incoming_person_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request);
     int count = 0;
+    
 
     while (run_simulation)
     {
+        /*
         for (Person& p: persons)
         {
             p.simulate();
@@ -155,12 +193,19 @@ void simulateFloor(int rank) {
                 p.state = Gone;
             }
         }
+         */
         
         // remove all persons with state == Moving from the vector
         for (auto it = persons.begin(); it != persons.end();)
         {
-            if (it->state == Gone)
+            it->simulate();
+            if (it->state == Moving)
             {
+                cout << "Person " << it->id << " done working, waiting for elevator on floor " << rank << endl;
+                // send person to elevator, this blocks so if any other persons wants an elevator, they will wait
+                int elevator = rand_range(0, 2);
+                ::MPI_Send(&it->id, 1, MPI_INT, elevator, 0, MPI_COMM_WORLD);
+                it->state = Gone;
                 it = persons.erase(it);
             }
             else
