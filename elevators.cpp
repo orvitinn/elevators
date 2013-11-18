@@ -14,9 +14,10 @@ using std::endl;
 using std::time;
 using std::vector;
 
-enum State { New, Working, Moving, Gone };
+enum State { New, Working, Moving, Gone, Reading, Writing };
 
 const int RUNTIME_SECONDS = 10.0;
+double START;
 
 double rand_range(double min_n, double max_n)
 {
@@ -83,91 +84,78 @@ int get_next_floor(int current_floor)
 
 
 void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
-    double start = MPI_Wtime();
     cout << "Elevator " << rank << " running." << endl;
     // elevator simulation
     int person;
     // rank 2,3,4 are floors 1,2,3
-    vector<int> floors = {2,3,4};
     MPI_Status status;
+    MPI_Request request, iorequest_1, iorequest_2;
     bool run_simulation = true;
     int count = 0;
     
     // File io
     MPI_File fh;
-    MPI_Info info;
-    // char filename[] = "/home/maa33/code/elevators/elevator_dump.bin";
     char file_name[] = "/home/maa33/code/elevators/data.out";
-    MPI_Info_create(&info);
     char buffer[4];
     
     int rc = MPI_File_open(lyftuhopur, file_name, MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh);
     // int rc = MPI_File_open( MPI_COMM_WORLD, file_name, MPI_MODE_CREATE | MPI_MODE_RDWR | MPI_MODE_SEQUENTIAL, MPI_INFO_NULL, &out_file);
+    
+    int destination;
 
     cout << "MPI_File_open returned " << rc << " on " << rank << endl;
-    
-    while((MPI_Wtime() - start) < RUNTIME_SECONDS) {
-        cout << rank << ".." << endl;
-        ::MPI_Recv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-        cout << rank << "-" << endl;
-        
-        if (person == -1)
+    State state = Reading;
+    ::MPI_Irecv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request);
+    while((MPI_Wtime() - START) < RUNTIME_SECONDS) {
+        usleep(100000); // to reduce cpu time - work every 100ms
+        if (state == Reading)
         {
-            cout << "Elevator " << rank << " got a quit message. " << endl;
-            break;
+            int something_read=0;
+            MPI_Test(&request, &something_read, &status);
+            if (something_read)
+            {
+                cout << "Person " << person << " entered elevator " << rank << endl;
+                int source = status.MPI_SOURCE;
+                destination = get_next_floor(source);
+                int movingtime = abs(source - destination);
+                cout << "Elevator " << rank << " writing to file." << endl;
+                buffer[0] = static_cast<char>(person);
+                buffer[1] = 1;
+                buffer[2] = static_cast<char>(rank);
+                buffer[3] = static_cast<char>(source);
+                MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
+                
+                cout << "Elevator " << rank << " sending person " << person << " from floor " << source << " to floor " << destination<< ", taking " << movingtime << " seconds." << endl;
+                
+                // elevator is now moving
+                // usleep(movingtime*10000);
+                
+                ::MPI_Isend(&person, 1, MPI_INT, destination, 0, MPI_COMM_WORLD, &request);
+                state = Writing;
+            }
         }
-        // send the person to either of the other floors
-        int source = status.MPI_SOURCE;
-        // choose new floor for person
-        int destination = get_next_floor(source);
-        int movingtime = abs(source - destination);
-        
-        // write to the binary file when a person enters the elevator
-        // IO layout. Each record 32 bits
-        // person id, action, elevator, floor
-        //    8 bit   8 bit    8 bit    8 bit
-        // action
-        // 1: entered elevator
-        // 2: left elevator
-        
-        cout << "Elevator " << rank << " writing to file." << endl;
-        
-        buffer[0] = static_cast<char>(person);
-        buffer[1] = 1;
-        buffer[2] = static_cast<char>(rank);
-        buffer[3] = static_cast<char>(source);
-        MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
-        
-        cout << "Elevator " << rank << " sending person " << person << " from floor " << source << " to floor " << destination<< ", taking " << movingtime << " seconds." << endl;
-        
-        // elevator is now moving
-        // usleep(movingtime*10000);
-        
-        ::MPI_Send(&person, 1, MPI_INT, destination, 0, MPI_COMM_WORLD);
-        
-        cout << "Elevator " << rank << " empty." << endl;
-        
-        // write again when person has left the elevator (and entered a floor)
-        buffer[1] = 2;
-        buffer[3] = static_cast<char>(destination);
-        MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
+        else {
+            // state = Writing
+            int something_written=0;    
+            MPI_Test(&request, &something_written, &status);
+            if (something_written)
+            {
+                cout << "Elevator " << rank << " writing to file." << endl;
+                buffer[0] = static_cast<char>(person);
+                buffer[1] = 2;
+                buffer[2] = static_cast<char>(rank);
+                buffer[3] = static_cast<char>(destination);
+                ::MPI_File_iwrite_ordered(fh, buffer, 4, MPI_CHAR, , &iorequest_2);
+                cout << "Person " << person << " left the elevator on floor " << destination << endl;
+                ::MPI_Irecv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request);
+                state = Reading;
+            }
+        }
     }
-    
-    
-    
-    ::MPI_Recv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-    cout << "Elevator " << rank << " got another quit message" << endl;
-    ::MPI_Recv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-    cout << "Elevator " << rank << " got the last quit message" << endl;
-    
-    // send quit message to all floors
-    int quit_message = -1;
-    ::MPI_Send(&quit_message, 1, MPI_INT, 2, 0, MPI_COMM_WORLD);
-    ::MPI_Send(&quit_message, 1, MPI_INT, 3, 0, MPI_COMM_WORLD);
-    ::MPI_Send(&quit_message, 1, MPI_INT, 4, 0, MPI_COMM_WORLD);
-    
-    cout << "Elevator " << rank << " sent quit messages to all floors." << endl;
-    
+
+    cout << "Elevator " << rank << " closing." << endl;
+    MPI_Barrier(lyftuhopur);
+    cout << "Fin. " << rank << endl;
     rc = MPI_File_close(&fh);
 }
 
@@ -215,7 +203,7 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
         p.start_work();
     
     int incoming_person_id;
-    MPI_Request request;
+    MPI_Request request, send_request;
     int cnt = 0;
 
     
@@ -224,9 +212,9 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
     // check for new persons on floor
     ::MPI_Irecv(&incoming_person_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request);
     int count = 0;
-    
+    int send_tmp;
 
-    while((MPI_Wtime() - start) < RUNTIME_SECONDS)
+    while((MPI_Wtime() - START) < RUNTIME_SECONDS)
     {
         for (auto it = persons.begin(); it != persons.end();)
         {
@@ -236,7 +224,8 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
                 cout << "Person " << it->id << " done working, waiting for elevator on floor " << rank << endl;
                 // send person to elevator, this blocks so if any other persons wants an elevator, they will wait
                 int elevator = rand_range(0, 2);
-                ::MPI_Send(&it->id, 1, MPI_INT, elevator, 0, MPI_COMM_WORLD);
+                send_tmp = it->id;
+                ::MPI_Isend(&send_tmp, 1, MPI_INT, elevator, 0, MPI_COMM_WORLD, &send_request);
                 it->state = Gone;
                 it = persons.erase(it);
             }
@@ -250,10 +239,6 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
         MPI_Test(&request, &something_read, &status);
         if (something_read)
         {
-            if (incoming_person_id == -1) {
-                cnt++;
-                break;
-            }
             cout << "Person " << incoming_person_id << " entered floor " << rank << endl;
             Person p(incoming_person_id);
             p.start_work();
@@ -266,23 +251,6 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
     }
     
     // sendum á báðar lyftur að við séum að fara að hætta... lesum líka ef lyftur eru að reyna að senda okkur
-    // allt async þar sem okkur er sama um gildið - við erum hætt!
-    cout << "Simulation on floor " << rank << " quitting. Sending quit messages" << endl;
-    int quit_message = -1;
-    int answer, answer2;
-    MPI_Request request2,request3, request4;
-    ::MPI_Isend(&quit_message, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
-    ::MPI_Isend(&quit_message, 1, MPI_INT, 1, 0, MPI_COMM_WORLD, &request2);
-    // wait for the quit message from the elevators
-    int incoming_message;
-    while (cnt < 2)
-    {
-        ::MPI_Recv(&incoming_message, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-
-        cout << "Floor " << rank << " in quit mode, got message " << incoming_message << ", cnt=" << cnt << endl;
-        if (incoming_message == -1)
-            cnt++;
-    }
     cout << "Simulation on floor " << rank << " now finally finished quitting." << endl;
 }
 
@@ -298,7 +266,9 @@ int main(int argc, char* argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     
     srand((unsigned)time(NULL) + rank*100);
-    
+
+    START = MPI_Wtime();
+
     
     // búum til com fyrir lyfturnar.
     MPI_Group lyftuhopur, haedahopur, allir;
@@ -324,6 +294,8 @@ int main(int argc, char* argv[]) {
     }
     
     cout << "Node " << rank << " stopping." << endl;
+    MPI_Barrier(MPI_COMM_WORLD);
+    cout << "Node " << rank << " stopped." << endl;
     
     MPI_Finalize();
 }
