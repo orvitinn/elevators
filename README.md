@@ -1,16 +1,13 @@
 elevators
 =========
 
-Lyftuverkefni í forritun ofurtölva
+Elevator project in the course Programming supercomputer B.
 
+Statues:
+Model is up and running, persons travel between floors with the elevators
+Saves the state correctly to a binary file.
+Uses relative time to decide when to quit.
 
-Nota MPI_Abort til að slökkva á öllum nóðum þegar einhver nóða hættir. Þá er hægt að láta lyfturnar blokkka.
-Annað fall til að fá hæð til að fara á.
-Annað fall til að geta sofið í millisekúndur (microsekúndur reyndar)
-
-Vantar:
-MPI_IO
-sleep í lyftur
-
-
-Um leið og ég reyni að opna skrá með MPI_IO klikkar forritið, jafnvel þó ég skrifi ekkert í skrá. Þarf að skoða betur.
+Todo: 
+Put elevator loop in to a "game loop" like the floor loop/logic. Already implemended.
+One of the elevator nodes still hangs on shutdown.
