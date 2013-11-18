@@ -1,11 +1,13 @@
 elevators
 =========
 
-Lyftuverkefni í forritun ofurtölva
+Elevator project in the course Programming supercomputer B.
 
-Vistar status rétt í binary skrá.
-Módelið keyrir fínt.
-Nota nú tíma en ekki tick til að ákveða hvenær forrit hættir.
+Statues:
+Model is up and running, persons travel between floors with the elevators
+Saves the state correctly to a binary file.
+Uses relative time to decide when to quit.
 
 Todo: 
-Setja lyftuvinnslu í "leikjalúppu" eins og model lykkjuna. Þannig losunum við við shutdown flækjuna.
+Put elevator loop in to a "game loop" like the floor loop/logic. Already implemended.
+One of the elevator nodes still hangs on shutdown.
