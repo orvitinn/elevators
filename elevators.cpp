@@ -85,15 +85,12 @@ int get_next_floor(int current_floor)
 
 void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
     cout << "Elevator " << rank << " running." << endl;
-    // elevator simulation
     int person;
-    // rank 2,3,4 are floors 1,2,3
     MPI_Status status;
     MPI_Request request, iorequest_1, iorequest_2;
     bool run_simulation = true;
     int count = 0;
     
-    // File io
     MPI_File fh;
     char file_name[] = "/home/maa33/code/elevators/data.out";
     char buffer[4];
@@ -123,12 +120,14 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
                 buffer[1] = 1;
                 buffer[2] = static_cast<char>(rank);
                 buffer[3] = static_cast<char>(source);
-                MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
+                // MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
+                MPI_File_write_shared(fh, buffer, 4, MPI_CHAR, &status);
+                // MPI_File_write(fh, buffer, 4, MPI_CHAR, &status);
                 
                 cout << "Elevator " << rank << " sending person " << person << " from floor " << source << " to floor " << destination<< ", taking " << movingtime << " seconds." << endl;
                 
                 // elevator is now moving
-                // usleep(movingtime*10000);
+                usleep(movingtime*10000);
                 
                 ::MPI_Isend(&person, 1, MPI_INT, destination, 0, MPI_COMM_WORLD, &request);
                 state = Writing;
@@ -145,7 +144,9 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
                 buffer[1] = 2;
                 buffer[2] = static_cast<char>(rank);
                 buffer[3] = static_cast<char>(destination);
-                ::MPI_File_iwrite_ordered(fh, buffer, 4, MPI_CHAR, , &iorequest_2);
+                // ::MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
+                ::MPI_File_write_shared(fh, buffer, 4, MPI_CHAR, &status);
+                // ::MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
                 cout << "Person " << person << " left the elevator on floor " << destination << endl;
                 ::MPI_Irecv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request);
                 state = Reading;
