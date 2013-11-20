@@ -14,6 +14,18 @@ elevator at any moment.
 Status:
 Model is up and running, persons travel between floors with the elevators
 Saves the state correctly to a binary file.
+Saves on both floors and in elevator.
 Uses relative time to decide when to quit.
 Put elevator loop in to a "game loop" like the floor loop/logic. 
 Very simple reading code disabled in this file.
+
+
+Data file:
+Each "dump" consists of 4 bytes.
+
+{id of person}{operation}{elevator}{floor}
+
+operations:
+1: enter elevator on floor
+2. exit elevator on floor
+3. person stops working (sleeping) on floor  (elevator=-1)
