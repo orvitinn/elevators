@@ -16,7 +16,10 @@ using std::vector;
 
 enum State { New, Working, Moving, Gone, Reading, Writing };
 
-const int RUNTIME_SECONDS = 10.0;
+const int RUNTIME_SECONDS = 20.0;
+char output_file_name[] = "/home/maa33/code/elevators/data.out";
+
+
 double START;
 
 double rand_range(double min_n, double max_n)
@@ -92,10 +95,10 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
     int count = 0;
     
     MPI_File fh;
-    char file_name[] = "/home/maa33/code/elevators/data.out";
     char buffer[4];
     
-    int rc = MPI_File_open(lyftuhopur, file_name, MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh);
+    int rc = MPI_File_open(MPI_COMM_WORLD, output_file_name, MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh);
+    // int rc = MPI_File_open(lyftuhopur, file_name, MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh);
     // int rc = MPI_File_open( MPI_COMM_WORLD, file_name, MPI_MODE_CREATE | MPI_MODE_RDWR | MPI_MODE_SEQUENTIAL, MPI_INFO_NULL, &out_file);
     
     int destination;
@@ -120,9 +123,7 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
                 buffer[1] = 1;
                 buffer[2] = static_cast<char>(rank);
                 buffer[3] = static_cast<char>(source);
-                // MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
                 MPI_File_write_shared(fh, buffer, 4, MPI_CHAR, &status);
-                // MPI_File_write(fh, buffer, 4, MPI_CHAR, &status);
                 
                 cout << "Elevator " << rank << " sending person " << person << " from floor " << source << " to floor " << destination<< ", taking " << movingtime << " seconds." << endl;
                 
@@ -144,9 +145,7 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
                 buffer[1] = 2;
                 buffer[2] = static_cast<char>(rank);
                 buffer[3] = static_cast<char>(destination);
-                // ::MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
                 ::MPI_File_write_shared(fh, buffer, 4, MPI_CHAR, &status);
-                // ::MPI_File_write_ordered(fh, buffer, 4, MPI_CHAR, &status);
                 cout << "Person " << person << " left the elevator on floor " << destination << endl;
                 ::MPI_Irecv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request);
                 state = Reading;
@@ -169,8 +168,9 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
     vector<int> elevators = {0,1};
 
     char buf[14];
+    char buffer[4];
     
-    MPI_File fh;
+    MPI_File fh, fh2;
     MPI_Info info;
     MPI_Status status;
     
@@ -185,6 +185,10 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
     
     rc = MPI_File_close(&fh);
 #endif
+
+    int rc = MPI_File_open(MPI_COMM_WORLD, output_file_name, MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh2);
+    
+    
     // lesa nöfn úr skrá með mpi_io - en fyrst - setja inn einhver gildi
     if (rank == 0) {
         persons.push_back(Person(1));
@@ -223,6 +227,12 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
             if (it->state == Moving)
             {
                 cout << "Person " << it->id << " done working, waiting for elevator on floor " << rank << endl;
+                buffer[0] = static_cast<char>(it->id);
+                buffer[1] = 3;
+                buffer[2] = static_cast<char>(-1);
+                buffer[3] = static_cast<char>(rank);
+                ::MPI_File_write_shared(fh2, buffer, 4, MPI_CHAR, &status);
+                
                 // send person to elevator, this blocks so if any other persons wants an elevator, they will wait
                 int elevator = rand_range(0, 2);
                 send_tmp = it->id;
@@ -252,6 +262,8 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
     }
     
     // sendum á báðar lyftur að við séum að fara að hætta... lesum líka ef lyftur eru að reyna að senda okkur
+    rc = MPI_File_close(&fh2);
+
     cout << "Simulation on floor " << rank << " now finally finished quitting." << endl;
 }
 
