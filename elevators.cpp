@@ -174,19 +174,23 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
     MPI_Info info;
     MPI_Status status;
     
-#if 0
-    char file_name[] = "/home/maa33/code/elevators/names.txt";
+#if 1
+    char input_file_name[] = "/home/maa33/code/elevators/names.txt";
     char native[] = "native";
-    int rc = MPI_File_open( haedahopur, file_name, MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+    int rc = MPI_File_open( haedahopur, input_file_name, MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
     MPI_File_set_view(fh, rank*sizeof(char)*15, MPI_CHAR, MPI_CHAR, native, MPI_INFO_NULL);
-    MPI_File_read(fh, buf, 14, MPI_CHAR, &status);
 
-    cout << rank << " read name from file: " << buf << endl;
+
+    for (int i=0; i<2; i++)
+    {
+        MPI_File_read(fh, buf, 14, MPI_CHAR, &status);
+        cout << rank << " read name from file: " << buf << endl;
+    }
     
     rc = MPI_File_close(&fh);
 #endif
 
-    int rc = MPI_File_open(MPI_COMM_WORLD, output_file_name, MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh2);
+    rc = MPI_File_open(MPI_COMM_WORLD, output_file_name, MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh2);
     
     
     // lesa nöfn úr skrá með mpi_io - en fyrst - setja inn einhver gildi
