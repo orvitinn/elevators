@@ -7,6 +7,8 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <cctype>
+#include <algorithm>
 
 #include "mpi.h"
 
@@ -14,6 +16,7 @@ using std::cout;
 using std::endl;
 using std::time;
 using std::vector;
+using std::string;
 
 enum State { New, Working, Moving, Gone, Reading, Writing };
 
@@ -188,9 +191,11 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
     cout << ss.str() << endl;
 
     int rc = MPI_File_open(MPI_COMM_WORLD, output_file_name, MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &fh2);
-        
+    
     for (Person& p: persons)
+    {
         p.start_work();
+    }
     
     int incoming_person_id;
     MPI_Request request, send_request;
@@ -261,6 +266,13 @@ void split(const std::string &s, char delim, std::vector<std::string> &elems) {
     }
 }
 
+inline std::string trim(const std::string &s)
+{
+    auto wsfront=std::find_if_not(s.begin(),s.end(),[](int c){return std::isspace(c);});
+    auto wsback=std::find_if_not(s.rbegin(),s.rend(),[](int c){return std::isspace(c);}).base();
+    return (wsback<=wsfront ? std::string() : std::string(wsfront,wsback));
+}
+
 
 int main(int argc, char* argv[]) {
     MPI_Status status;
@@ -285,19 +297,15 @@ int main(int argc, char* argv[]) {
     vector<char> name_buffer(static_cast<int>(filesize));
     MPI_File_read(fh, &name_buffer[0], static_cast<int>(filesize), MPI_CHAR, &status);
     rc = MPI_File_close(&fh);
-
-    std::string name_string_buffer(name_buffer.begin(), name_buffer.end());
-
-#if 1
-    if (rank == 0)
-    {
-        cout << "Las:\n" << name_string_buffer << endl;
-    }
-#endif
     
     // the names are in name_buffer, split it on newlines, then strip whitespaces from the end. Convert each to a string and push_back the strings to the names vector
+    std::string name_string_buffer(name_buffer.begin(), name_buffer.end());
     split(name_string_buffer, '\n', names);
-    
+    for (string& name: names)
+    {
+        name = trim(name);
+    }
+        
     // búum til com fyrir lyfturnar.
     MPI_Group lyftuhopur, haedahopur, allir;
     MPI_Comm lyftucomm, haedacomm;
