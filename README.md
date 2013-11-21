@@ -64,3 +64,12 @@ Each write consists of 4 bytes.
 0000640    3    2    1    2
 0000644
 </pre>
+
+<h4>interpretation</h4>
+Use a python scipt to read the binary file and name file. Then output a readable log.
+<pre>
+>>> while True:
+...     chunk = f.read(4)
+...     if not chunk: break
+...     print struct.unpack('bbbb', chunk)
+</pre>
