@@ -26,9 +26,11 @@ Each write consists of 4 bytes.
 {id of person}{operation}{elevator}{floor}
 
 <h4>operations</h4>
-1: enter elevator on floor
-2. exit elevator on floor
-3. person stops working (sleeping) on floor  (elevator=-1)
+<ol>
+<li>enter elevator on floor</li>
+<li>exit elevator on floor</li>
+<li>person stops working (sleeping) on floor  (elevator=-1)</li>
+</ol>
 
 <h4>Example output</h4>
 <pre>
