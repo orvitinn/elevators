@@ -121,7 +121,7 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
             MPI_Test(&request, &something_read, &status);
             if (something_read)
             {
-                cout << "Person " << person << " entered elevator " << rank << endl;
+                cout << names[person] << " entered elevator " << rank << endl;
                 int source = status.MPI_SOURCE;
                 destination = get_next_floor(source);
                 int movingtime = abs(source - destination);
@@ -132,7 +132,7 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
                 buffer[3] = static_cast<char>(source);
                 MPI_File_write_shared(fh, buffer, 4, MPI_CHAR, &status);
                 
-                cout << "Elevator " << rank << " sending person " << person << " from floor " << source << " to floor " << destination<< ", taking " << movingtime << " seconds." << endl;
+                cout << "Elevator " << rank << " sending " << names[person] << " from floor " << source << " to floor " << destination<< ", taking " << movingtime << " seconds." << endl;
                 
                 // elevator is now moving
                 usleep(movingtime*10000);
@@ -153,7 +153,7 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
                 buffer[2] = static_cast<char>(rank);
                 buffer[3] = static_cast<char>(destination);
                 ::MPI_File_write_shared(fh, buffer, 4, MPI_CHAR, &status);
-                cout << "Person " << person << " left the elevator on floor " << destination << endl;
+                cout << names[person] << " left the elevator on floor " << destination << endl;
                 ::MPI_Irecv(&person, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &request);
                 state = Reading;
             }
@@ -168,6 +168,10 @@ void simulateElevator(int rank, MPI_Comm& lyftuhopur) {
 
 void simulateFloor(int rank, MPI_Comm& haedahopur) {
     MPI_Comm_rank(haedahopur, &rank);
+    int number_of_floors;
+    MPI_Comm_size(MPI_COMM_WORLD, &number_of_floors);
+
+    
     double start = MPI_Wtime();
 
     // floor simulation
@@ -183,7 +187,7 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
  
     std::stringstream ss;
     ss << "floor: " << rank;
-    for (int i=rank; i<names.size(); i+=3)
+    for (int i=rank; i<names.size(); i+=number_of_floors)
     {
         ss << "[" << i << "] " << names[i];
         persons.push_back(Person(i));
@@ -216,7 +220,7 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
             it->simulate();
             if (it->state == Moving)
             {
-                cout << "Person " << it->id << " done working, waiting for elevator on floor " << rank << endl;
+                cout << names[it->id] << " done working, waiting for elevator on floor " << rank << endl;
                 buffer[0] = static_cast<char>(it->id);
                 buffer[1] = 3;
                 buffer[2] = static_cast<char>(-1);
@@ -240,7 +244,7 @@ void simulateFloor(int rank, MPI_Comm& haedahopur) {
         MPI_Test(&request, &something_read, &status);
         if (something_read)
         {
-            cout << "Person " << incoming_person_id << " entered floor " << rank << endl;
+            cout << names[incoming_person_id] << " entered floor " << rank << endl;
             Person p(incoming_person_id);
             p.start_work();
             persons.push_back(p);
@@ -305,7 +309,7 @@ int main(int argc, char* argv[]) {
     {
         name = trim(name);
     }
-        
+    
     // búum til com fyrir lyfturnar.
     MPI_Group lyftuhopur, haedahopur, allir;
     MPI_Comm lyftucomm, haedacomm;
