@@ -1,9 +1,7 @@
 <h1>elevators</h1>
-=========
+<h2>Elevator project, Programming supercomputers</h2>
 
-<h2>Elevator project in the course Programming supercomputer B.</h2>
-
-<h3>Description:</h3>
+<h3>Description</h3>
 We use two nodes for elevators and three nodes for the floors. When a person stops working, it is sent to a random elevator. 
 We use the fact that MPI queues up io requests, so if the elevator is busy, the person just waits.
 
@@ -11,26 +9,28 @@ An elevator transports a person to either of the other floors by sending it to t
 elevator at any moment.
 
 
-<h3>Status:</h3>
-Model is up and running, persons travel between floors with the elevators
-Saves the state correctly to a binary file.
-Saves on both floors and in elevator.
-Uses relative time to decide when to quit.
-Put elevator loop in to a "game loop" like the floor loop/logic. 
-Very simple reading code disabled in this file.
+<h3>Status</h3>
+<ul>
+<li>Model is up and running, persons travel between floors with the elevators</li>
+<li>Saves the state correctly to a binary file.</li>
+<li>Saves on both floors and in elevator.</li>
+<li>Uses relative time to decide when to quit.</li>
+<li>Put elevator loop in to a "game loop" like the floor loop/logic. </li>
+<li>Very simple reading code disabled in this file.</li>
+</ul>
 
 
-<h3>Data file:</h3>
-Each "dump" consists of 4 bytes.
+<h3>Data file</h3>
+Each write consists of 4 bytes.
 
 {id of person}{operation}{elevator}{floor}
 
-<h4>operations:</h4>
+<h4>operations</h4>
 1: enter elevator on floor
 2. exit elevator on floor
 3. person stops working (sleeping) on floor  (elevator=-1)
 
-<h4>Example output:</h4>
+<h4>Example output</h4>
 <pre>
 [maa33@login-0-2 elevators]$ od -t d1 data.out 
 0000000    6    3   -1    2    6    1    0    4    6    2    0    3    1    3   -1    0  
