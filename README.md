@@ -16,7 +16,7 @@ elevator at any moment.
 <li>Saves on both floors and in elevator.</li>
 <li>Uses relative time to decide when to quit.</li>
 <li>Put elevator loop in to a "game loop" like the floor loop/logic. </li>
-<li>Very simple reading code disabled in this file.</li>
+<li>Names are read from a file in every node, assigned to floor nodes based on rank.</li>
 </ul>
 
 
